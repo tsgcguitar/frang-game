@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>皮卡丘跳格子：手機觸控完美版</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Microsoft JhengHei', sans-serif;
+            touch-action: none; /* 禁止瀏覽器預設觸控行為 */
+            user-select: none; /* 禁止選取文字 */
+            -webkit-user-select: none;
+        }
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            width: 800px;
+            height: 450px;
+            background: #000;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+        #uiLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #scoreBoard {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 0px #000;
+            position: absolute;
+            left: 20px;
+            top: 20px;
+        }
+        #levelText {
+            font-size: 20px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 1px 1px 0px #000;
+            position: absolute;
+            right: 20px;
+            top: 20px;
+        }
+        
+        /* 彈窗 */
+        .screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            border: 5px solid #333;
+            pointer-events: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            width: 85%;
+            max-width: 500px;
+            z-index: 20;
+        }
+        
+        #catchScreen { background: #f3e5f5; border-color: #673ab7; }
+        .boss-display {
+            width: 100px; height: 100px; margin: 0 auto 10px;
+            background: #fff; border-radius: 50%; border: 4px solid #673ab7;
+            display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+        
+        #powerBarContainer {
+            width: 80%; height: 30px; background: #333;
+            border: 3px solid #000; border-radius: 15px;
+            margin: 15px auto; position: relative; overflow: hidden;
+        }
+        #targetZone {
+            position: absolute; left: 45%; width: 15%; height: 100%;
+            background-color: #00ff00; opacity: 0.6; z-index: 1;
+            border-left: 1px solid #fff; border-right: 1px solid #fff;
+        }
+        #currentPower {
+            position: absolute; left: 0; top: 0; height: 100%; width: 0%;
+            background: linear-gradient(to right, #ffeb3b, #f44336);
+            z-index: 2;
+        }
+        
+        #pokedexScreen {
+            max-width: 700px; height: 80%; overflow-y: auto;
+            background: #c62828; color: #fff; border: 8px solid #8e0000;
+        }
+        .dex-entry {
+            background: #fff; color: #333; margin: 10px 0; padding: 10px;
+            border-radius: 10px; display: flex; align-items: center; text-align: left;
+            border: 2px solid #333;
+        }
+        .dex-img { width: 50px; height: 50px; margin-right: 15px; flex-shrink: 0; }
+        .dex-info h3 { margin: 0 0 5px 0; color: #d32f2f; font-size: 18px; }
+        .dex-info p { margin: 2px 0; font-size: 14px; }
+
+        .hidden { display: none !important; }
+
+        #countdownOverlay {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 100px; font-weight: 900; color: #fff;
+            text-shadow: 4px 4px 0 #d32f2f, -1px -1px 0 #000;
+            z-index: 30; pointer-events: none; opacity: 0;
+        }
+        .show-count { opacity: 1 !important; animation: popIn 0.5s ease-out; }
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.5); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1.0); }
+        }
+
+        .char-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .char-card { background: #f0f0f0; border: 3px solid #ccc; padding: 8px; cursor: pointer; border-radius: 10px; display: flex; flex-direction: column; align-items: center;}
+        .char-card.selected { border-color: #d32f2f; background: #ffebee; }
+        .char-icon { width: 40px; height: 40px; margin-bottom: 5px; border-radius: 5px; }
+        
+        button { 
+            background-color: #d32f2f; border: none; padding: 10px 25px; 
+            font-size: 18px; color: white; border-radius: 50px; 
+            cursor: pointer; box-shadow: 0 4px 0 #b71c1c; margin-top: 10px;
+            touch-action: manipulation; /* 優化觸控 */
+        }
+        button:active { transform: translateY(4px); box-shadow: none; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; box-shadow: none; }
+        
+        h1 { font-size: 24px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="450" tabindex="0"></canvas>
+    
+    <div id="uiLayer">
+        <div id="scoreBoard">Score: 0</div>
+        <div id="levelText">Level 1: 平原</div>
+        <div id="countdownOverlay">3</div>
+    </div>
+
+    <div id="selectScreen" class="screen">
+        <h1>請選擇角色</h1>
+        <p style="font-size:14px; color:#666;">(電腦按空白鍵，手機點螢幕跳躍)</p>
+        <div class="char-grid">
+            <div class="char-card" onclick="selectCharacter('pikachu', this)">
+                <div class="char-icon" style="background:#FFD700;"></div><span>皮卡丘</span>
+            </div>
+            <div class="char-card" onclick="selectCharacter('charmander', this)">
+                <div class="char-icon" style="background:#FF4500;"></div><span>小火龍</span>
+            </div>
+            <div class="char-card" onclick="selectCharacter('gengar', this)">
+                <div class="char-icon" style="background:#4B0082;"></div><span>梗鬼</span>
+            </div>
+            <div class="char-card" onclick="selectCharacter('chikorita', this)">
+                <div class="char-icon" style="background:#90EE90;"></div><span>菊草葉</span>
+            </div>
+        </div>
+        <button id="startBtn" disabled>開始冒險</button>
+    </div>
+
+    <div id="catchScreen" class="screen hidden">
+        <h1 id="bossNameTitle" style="color:#673ab7;">野生的超夢出現了！</h1>
+        <div class="boss-display"><canvas id="bossCanvas" width="100" height="100"></canvas></div>
+        <div id="ballCount" style="color:#d32f2f; font-weight:bold;">剩餘精靈球: 6</div>
+        <div id="powerBarContainer">
+            <div id="targetZone"></div><div id="currentPower"></div>
+        </div>
+        <p id="catchInstruction">按住 <span style="color:red; font-weight:bold;">[空白鍵]</span> 或 <span style="color:red; font-weight:bold;">[長按螢幕]</span> 蓄力！</p>
+        <p id="catchResult" style="height: 20px; font-weight:bold; color:#333;"></p>
+    </div>
+
+    <div id="gameOverScreen" class="screen hidden">
+        <h1 id="goTitle">哎呀！上班玩電腦喔！</h1>
+        <p id="finalScore">得分: 0</p>
+        <button id="restartBtn">再玩一次</button>
+    </div>
+
+    <div id="victoryScreen" class="screen hidden">
+        <h1 style="color:#2e7d32;">恭喜過關！</h1>
+        <h2 style="color:#d32f2f;">你這個薪水小偷</h2>
+        <p>你已經征服了所有的跳格子挑戰。</p>
+        <button onclick="showPokedex()">查看圖鑑</button>
+        <button id="victoryRestartBtn">重新開始</button>
+    </div>
+
+    <div id="pokedexScreen" class="screen hidden">
+        <h1>神奇寶貝圖鑑</h1>
+        <div id="dexContent"></div>
+        <button onclick="closePokedex()">關閉</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI Elements
+    const scoreBoard = document.getElementById('scoreBoard');
+    const levelText = document.getElementById('levelText');
+    const countdownOverlay = document.getElementById('countdownOverlay');
+    const selectScreen = document.getElementById('selectScreen');
+    const catchScreen = document.getElementById('catchScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const victoryScreen = document.getElementById('victoryScreen');
+    const pokedexScreen = document.getElementById('pokedexScreen');
+    
+    const bossCanvas = document.getElementById('bossCanvas');
+    const bossCtx = bossCanvas.getContext('2d');
+    const currentPowerBar = document.getElementById('currentPower');
+    const catchResult = document.getElementById('catchResult');
+    const ballCountText = document.getElementById('ballCount');
+    const bossNameTitle = document.getElementById('bossNameTitle');
+
+    // Game Variables
+    let gameState = 'MENU'; 
+    let score = 0;
+    let frames = 0;
+    let gameSpeed = 5;
+    let animationId;
+    let currentLevel = 1; 
+    let selectedCharId = null;
+    let currentPlayerChar = null; 
+    
+    let catchTargetBoss = ''; 
+    let ballsLeft = 6;
+    let isCharging = false;
+    let chargeValue = 0; 
+    let chargeSpeed = 2.5; 
+    let caughtBosses = []; 
+
+    // 手感變數
+    let jumpBufferCounter = 0; 
+    const JUMP_BUFFER_LIMIT = 15; 
+    let coyoteCounter = 0; 
+    const COYOTE_LIMIT = 10; 
+
+    const pokeData = {
+        pikachu: { name: "皮卡丘", h: "0.4m", w: "6.0kg", nature: "頑皮", skill: "十萬伏特" },
+        charmander: { name: "小火龍", h: "0.6m", w: "8.5kg", nature: "勇敢", skill: "噴射火焰" },
+        gengar: { name: "梗鬼", h: "1.5m", w: "40.5kg", nature: "調皮", skill: "暗影球" },
+        chikorita: { name: "菊草葉", h: "0.9m", w: "6.4kg", nature: "溫順", skill: "飛葉快刀" },
+        mewtwo: { name: "超夢", h: "2.0m", w: "122.0kg", nature: "冷酷", skill: "精神擊破" },
+        celebi: { name: "雪拉比", h: "0.6m", w: "5.0kg", nature: "害羞", skill: "時光咆哮" }
+    };
+
+    const drawers = {
+        pikachu: (c, x, y, w, h) => {
+            c.fillStyle = '#FFD700'; c.fillRect(x, y, w, h);
+            c.fillStyle = '#FF0000'; c.beginPath(); c.arc(x+5, y+25, 4, 0, Math.PI*2); c.fill(); c.beginPath(); c.arc(x+35, y+25, 4, 0, Math.PI*2); c.fill();
+        },
+        charmander: (c, x, y, w, h) => {
+            c.fillStyle = '#FF4500'; c.fillRect(x, y, w, h);
+            c.fillStyle = (frames % 20 < 10) ? '#FF0000' : '#FFFF00';
+            c.beginPath(); c.moveTo(x, y+30); c.quadraticCurveTo(x-15, y+20, x-5, y+10); c.fill();
+        },
+        gengar: (c, x, y, w, h) => {
+            c.fillStyle = '#4B0082'; c.beginPath(); c.arc(x+20, y+20, 20, 0, Math.PI*2); c.fill();
+            c.fillStyle = '#FF0000'; c.beginPath(); c.arc(x+12, y+18, 5, 0, Math.PI*2); c.fill(); c.beginPath(); c.arc(x+28, y+18, 5, 0, Math.PI*2); c.fill();
+        },
+        chikorita: (c, x, y, w, h) => {
+            c.fillStyle = '#90EE90'; c.fillRect(x, y, w, h);
+            c.fillStyle = '#228B22'; c.beginPath(); c.ellipse(x+30, y-10, 15, 8, Math.PI/4, 0, Math.PI*2); c.fill();
+        },
+        mewtwo: (c, x, y, w, h) => {
+            c.fillStyle = '#E0E0E0'; c.fillRect(x, y, w, h);
+            c.fillStyle = '#9C27B0'; c.beginPath(); c.ellipse(x+20, y+25, 10, 12, 0, 0, Math.PI*2); c.fill();
+            c.strokeStyle = '#9C27B0'; c.lineWidth=3; c.beginPath(); c.moveTo(x+10, y+35); c.quadraticCurveTo(x-20, y+30, x-10, y-10); c.stroke();
+        },
+        celebi: (c, x, y, w, h) => {
+            c.fillStyle = '#a5d6a7'; c.beginPath(); c.ellipse(x+20, y+20, 20, 25, 0, 0, Math.PI*2); c.fill();
+            c.fillStyle = '#1b5e20'; c.beginPath(); c.moveTo(x+10, y); c.lineTo(x-5, y-15); c.lineTo(x+15, y); c.fill();
+            c.beginPath(); c.moveTo(x+30, y); c.lineTo(x+45, y-15); c.lineTo(x+25, y); c.fill();
+            c.fillStyle = '#0288d1'; c.beginPath(); c.arc(x+12, y+18, 4, 0, Math.PI*2); c.fill(); c.beginPath(); c.arc(x+28, y+18, 4, 0, Math.PI*2); c.fill();
+            c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.ellipse(x-5, y+15, 10, 5, -0.2, 0, Math.PI*2); c.fill();
+            c.beginPath(); c.ellipse(x+45, y+15, 10, 5, 0.2, 0, Math.PI*2); c.fill();
+        }
+    };
+
+    const player = {
+        x: 100, y: 300, width: 40, height: 40, dy: 0, jumpForce: 13, gravity: 0.7, grounded: false,
+        update: function() {
+            if (this.grounded) coyoteCounter = COYOTE_LIMIT;
+            else if (coyoteCounter > 0) coyoteCounter--;
+            if (jumpBufferCounter > 0) jumpBufferCounter--;
+
+            if (jumpBufferCounter > 0 && coyoteCounter > 0) {
+                this.performJump();
+            }
+
+            this.y += this.dy;
+
+            if (this.y + this.height < canvas.height) { 
+                this.dy += this.gravity; 
+                this.grounded = false; 
+            } else if (this.y > canvas.height + 50) {
+                gameOver();
+            }
+        },
+        performJump: function() {
+            this.dy = -this.jumpForce;
+            this.grounded = false;
+            coyoteCounter = 0; 
+            jumpBufferCounter = 0; 
+            playTone(400, 'square', 0.1);
+        },
+        draw: function() {
+            let d = drawers[currentPlayerChar];
+            if(d) d(ctx, this.x, this.y, this.width, this.height);
+            else { ctx.fillStyle='red'; ctx.fillRect(this.x,this.y,this.width,this.height);}
+        }
+    };
+
+    let platforms = [];
+    class Platform {
+        constructor(x, w) {
+            this.x = x; this.y = 350; this.width = w; this.height = canvas.height - this.y;
+        }
+        update() { this.x -= gameSpeed; }
+        draw() {
+            if (currentLevel === 1) {
+                ctx.fillStyle = '#65c368'; ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.fillStyle = '#5d4037'; ctx.fillRect(this.x, this.y + 10, this.width, this.height - 10);
+                ctx.fillStyle = '#4caf50'; ctx.fillRect(this.x, this.y, this.width, 10);
+            } else {
+                ctx.fillStyle = '#ddd'; ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#999'; ctx.lineWidth = 2; ctx.beginPath();
+                for(let i=0; i<this.width; i+=40) { ctx.moveTo(this.x + i, this.y); ctx.lineTo(this.x + i - 20, this.y + this.height); }
+                ctx.stroke();
+                ctx.fillStyle = '#555'; ctx.fillRect(this.x, this.y + this.height - 10, this.width, 10);
+            }
+        }
+    }
+
+    // --- 關鍵修正：手機觸控與鍵盤整合 ---
+    
+    // 1. 處理輸入的通用函式
+    function handleInputStart(e) {
+        // 如果是點到按鈕，不觸發跳躍
+        if(e.target.tagName === 'BUTTON') return;
+        
+        // 防止手機畫面捲動
+        if(e.type === 'touchstart') e.preventDefault();
+        
+        // 確保焦點在遊戲上
+        canvas.focus();
+        window.focus();
+
+        if (gameState === 'PLAYING') {
+            jumpBufferCounter = JUMP_BUFFER_LIMIT; // 觸發跳躍
+        } else if (gameState === 'CATCHING') {
+            handleCatchInput(true); // 開始蓄力
+        }
+    }
+
+    function handleInputEnd(e) {
+        if(e.target.tagName === 'BUTTON') return;
+        if(e.type === 'touchend') e.preventDefault();
+
+        if (gameState === 'CATCHING') {
+            handleCatchInput(false); // 丟球
+        }
+    }
+
+    // 2. 綁定鍵盤事件
+    window.addEventListener('keydown', (e) => {
+        if (e.repeat) return;
+        if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32) {
+            e.preventDefault();
+            if (gameState === 'PLAYING') jumpBufferCounter = JUMP_BUFFER_LIMIT;
+            else if (gameState === 'CATCHING') handleCatchInput(true);
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32) {
+            if (gameState === 'CATCHING') handleCatchInput(false);
+        }
+    });
+
+    // 3. 綁定觸控事件 (手機專用) - 使用 passive: false 以允許 preventDefault
+    window.addEventListener('touchstart', handleInputStart, {passive: false});
+    window.addEventListener('touchend', handleInputEnd, {passive: false});
+
+    // 4. 綁定滑鼠事件 (電腦滑鼠點擊)
+    window.addEventListener('mousedown', handleInputStart);
+    window.addEventListener('mouseup', handleInputEnd);
+
+
+    // --- Game Logic ---
+
+    function selectCharacter(id, el) {
+        selectedCharId = id;
+        document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+        document.getElementById('startBtn').disabled = false;
+    }
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+        initGame();
+        selectScreen.classList.add('hidden');
+    });
+    document.getElementById('restartBtn').addEventListener('click', () => {
+        gameOverScreen.classList.add('hidden');
+        selectScreen.classList.remove('hidden');
+    });
+    document.getElementById('victoryRestartBtn').addEventListener('click', () => {
+        victoryScreen.classList.add('hidden');
+        selectScreen.classList.remove('hidden');
+    });
+
+    function initGame() {
+        gameState = 'PLAYING';
+        currentPlayerChar = selectedCharId;
+        score = 0; frames = 0; currentLevel = 1; gameSpeed = 5;
+        platforms = [new Platform(0, 1000)];
+        caughtBosses = [];
+        player.y = 200; player.dy = 0;
+        
+        jumpBufferCounter = 0;
+        coyoteCounter = 0;
+
+        scoreBoard.innerText = "Score: 0";
+        levelText.innerText = "Level 1: 平原";
+        levelText.classList.remove('god-mode');
+        
+        window.focus();
+        canvas.focus();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function gameLoop() {
+        if (gameState !== 'PLAYING' && gameState !== 'COUNTDOWN') return;
+
+        if (gameState === 'COUNTDOWN') {
+            drawScene();
+            return;
+        }
+
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        frames++;
+
+        drawBackground();
+        handlePlatformGen();
+
+        player.grounded = false;
+        platforms.forEach(p => {
+            if (player.x < p.x + p.width && player.x + player.width > p.x &&
+                player.y + player.height > p.y && 
+                player.y + player.height < p.y + player.dy + 20 + gameSpeed &&
+                player.dy >= 0) { 
+                
+                player.grounded = true; 
+                player.dy = 0; 
+                player.y = p.y - player.height;
+            }
+        });
+
+        player.update();
+        player.draw();
+
+        if (frames % 10 === 0) {
+            score++;
+            scoreBoard.innerText = "Score: " + score;
+            checkLevelProgress();
+        }
+
+        if (gameState === 'PLAYING') requestAnimationFrame(gameLoop);
+    }
+
+    function handlePlatformGen() {
+        const last = platforms[platforms.length-1];
+        if (last.x + last.width < canvas.width) {
+            let gap = (currentLevel > 1) ? Math.random()*80+100 : Math.random()*70+80;
+            platforms.push(new Platform(last.x + last.width + gap, Math.random()*200+100));
+        }
+        if (platforms[0].x + platforms[0].width < 0) platforms.shift();
+        platforms.forEach(p => { p.update(); p.draw(); });
+    }
+
+    function drawBackground() {
+        if (currentLevel === 1) {
+            ctx.fillStyle = '#87CEEB'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); 
+            ctx.arc(150 - (frames*0.5)%1000, 100, 30, 0, Math.PI*2); ctx.fill();
+        } else {
+            ctx.fillStyle = '#d7ccc8'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.strokeStyle = '#a1887f'; ctx.beginPath(); ctx.moveTo(0,350); ctx.lineTo(400,150); ctx.moveTo(800,350); ctx.lineTo(400,150); ctx.stroke();
+            ctx.fillStyle = '#5d4037'; ctx.fillRect(380,100,40,250);
+        }
+    }
+
+    function drawScene() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        drawBackground();
+        platforms.forEach(p => p.draw());
+        player.draw();
+    }
+
+    function checkLevelProgress() {
+        if (score === 50 && currentLevel === 1) triggerCatchMode('mewtwo');
+        if (score === 100 && currentLevel === 2) triggerCatchMode('celebi');
+    }
+
+    // --- Catch System ---
+    function triggerCatchMode(boss) {
+        gameState = 'CATCHING';
+        catchTargetBoss = boss;
+        ballsLeft = 6;
+        ballCountText.innerText = "剩餘精靈球: " + ballsLeft;
+        catchResult.innerText = "";
+        chargeValue = 0;
+        isCharging = false;
+        currentPowerBar.style.width = "0%";
+        
+        bossNameTitle.innerText = (boss === 'mewtwo') ? "野生的超夢出現了！" : "野生的雪拉比出現了！";
+        bossCtx.clearRect(0,0,100,100);
+        if (boss === 'mewtwo') drawers.mewtwo(bossCtx, 0, 0, 100, 100);
+        else drawers.celebi(bossCtx, 0, 0, 100, 100);
+        
+        catchScreen.classList.remove('hidden');
+        requestAnimationFrame(catchLoop);
+    }
+
+    function catchLoop() {
+        if (gameState !== 'CATCHING') return;
+        if (isCharging) {
+            chargeValue += chargeSpeed;
+            if (chargeValue > 100) chargeValue = 100;
+            currentPowerBar.style.width = chargeValue + "%";
+        }
+        requestAnimationFrame(catchLoop);
+    }
+
+    function handleCatchInput(isDown) {
+        if (gameState !== 'CATCHING') return;
+        if (isDown) {
+            if (!isCharging && ballsLeft > 0) {
+                isCharging = true;
+                chargeValue = 0;
+                catchResult.innerText = "蓄力中...";
+                catchResult.style.color = "#333";
+            }
+        } else {
+            if (isCharging) {
+                isCharging = false;
+                throwBall();
+            }
+        }
+    }
+
+    function throwBall() {
+        ballsLeft--;
+        ballCountText.innerText = "剩餘精靈球: " + ballsLeft;
+        let success = (chargeValue >= 45 && chargeValue <= 60);
+
+        if (success) {
+            playTone(800, 'sine', 0.1); playTone(1200, 'sine', 0.2);
+            catchResult.innerText = "漂亮！完美命中！";
+            catchResult.style.color = "green";
+            setTimeout(() => {
+                caughtBosses.push(catchTargetBoss);
+                endCatchMode(true);
+            }, 1000);
+        } else {
+            playTone(150, 'sawtooth', 0.3);
+            let msg = (chargeValue < 45) ? "太輕了！" : "太大力了！";
+            if (ballsLeft <= 0) {
+                catchResult.innerText = msg + " 沒球了！";
+                catchResult.style.color = "red";
+                setTimeout(() => endCatchMode(false), 1500);
+            } else {
+                catchResult.innerText = msg + " 再試一次！";
+                catchResult.style.color = "red";
+                setTimeout(() => {
+                    currentPowerBar.style.width = "0%";
+                    catchResult.innerText = "";
+                }, 800);
+            }
+        }
+    }
+
+    function endCatchMode(caught) {
+        catchScreen.classList.add('hidden');
+        if (caught) currentPlayerChar = catchTargetBoss;
+        
+        if (catchTargetBoss === 'mewtwo') startCountdown(2);
+        else if (catchTargetBoss === 'celebi') {
+            gameState = 'VICTORY';
+            speak("恭喜過關，你這個薪水小偷");
+            victoryScreen.classList.remove('hidden');
+        }
+    }
+
+    function startCountdown(nextLevelIdx) {
+        gameState = 'COUNTDOWN';
+        currentLevel = nextLevelIdx;
+        
+        if (currentLevel === 2) {
+            gameSpeed = 6;
+            levelText.innerText = "Level 2: 統神端火鍋";
+            levelText.classList.add('god-mode');
+        }
+
+        let count = 3;
+        countdownOverlay.innerText = count;
+        countdownOverlay.classList.add('show-count');
+        playTone(400, 'square', 0.1);
+
+        let timer = setInterval(() => {
+            count--;
+            if (count > 0) {
+                countdownOverlay.classList.remove('show-count');
+                void countdownOverlay.offsetWidth; 
+                countdownOverlay.innerText = count;
+                countdownOverlay.classList.add('show-count');
+                playTone(400, 'square', 0.1);
+            } else {
+                clearInterval(timer);
+                countdownOverlay.classList.remove('show-count');
+                gameState = 'PLAYING';
+                window.focus();
+                canvas.focus();
+                playTone(800, 'square', 0.3);
+                requestAnimationFrame(gameLoop);
+            }
+        }, 1000);
+    }
+
+    function gameOver() {
+        gameState = 'GAMEOVER';
+        let isMewtwo = (currentPlayerChar === 'mewtwo');
+        let txt = isMewtwo ? "都抓老子了，還那麼爛" : "哎呀！上班玩電腦喔！";
+        speak(txt);
+        document.getElementById('goTitle').innerText = isMewtwo ? "都抓老子了 還那麼爛" : "哎呀！上班玩電腦喔！";
+        document.getElementById('finalScore').innerText = "得分: " + score;
+        gameOverScreen.classList.remove('hidden');
+    }
+
+    function showPokedex() {
+        const content = document.getElementById('dexContent');
+        content.innerHTML = "";
+        let owned = [...new Set([selectedCharId, ...caughtBosses])];
+
+        owned.forEach(key => {
+            let data = pokeData[key];
+            if (!data) return;
+            let entry = document.createElement('div');
+            entry.className = 'dex-entry';
+            let cvs = document.createElement('canvas');
+            cvs.width = 60; cvs.height = 60;
+            cvs.className = 'dex-img';
+            let ctx = cvs.getContext('2d');
+            let d = drawers[key];
+            if(d) d(ctx, 0, 0, 60, 60); else { ctx.fillStyle='grey'; ctx.fillRect(0,0,60,60); }
+            
+            let info = document.createElement('div');
+            info.className = 'dex-info';
+            info.innerHTML = `<h3>${data.name}</h3><p>身高: ${data.h} | 體重: ${data.w}</p><p>個性: ${data.nature}</p><p>技能: ${data.skill}</p>`;
+            entry.appendChild(cvs); entry.appendChild(info);
+            content.appendChild(entry);
+        });
+
+        victoryScreen.classList.add('hidden');
+        pokedexScreen.classList.remove('hidden');
+    }
+
+    function closePokedex() {
+        pokedexScreen.classList.add('hidden');
+        victoryScreen.classList.remove('hidden');
+    }
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+    function playTone(freq, type, duration) {
+        if (!audioCtx) audioCtx = new AudioContext();
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = type; osc.frequency.value = freq;
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+    }
+    function speak(text) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'zh-TW'; u.rate = 1.2;
+            window.speechSynthesis.speak(u);
+        }
+    }
+
+    ctx.fillStyle = '#2c3e50'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+</script>
+</body>
+</html>
